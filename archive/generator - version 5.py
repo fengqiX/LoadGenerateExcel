@@ -2,7 +2,14 @@ import os,sys,math,time
 import re,json
 from openpyxl import load_workbook
 from openpyxl.styles import NamedStyle, Font, Border, Side, Alignment
-
+# address={
+#     "fullAddress":"",
+#     "partialAddress":"",
+#     "city":"",
+#     "province":"",
+#     "abbreviation":"",
+#     "zipcode":""
+# }
 __addresslist = []
 matching_UN = {"MRBTS":{"CIQ_name":"MRBTS ID","data":[]},
     "LTBTS":{"CIQ_name":"LNBTS ID","data":[]},
@@ -68,7 +75,7 @@ matching_E911={"Name":          {"CIQ_name":"Property Name", "data":[]},
               }                     
 matching_VAS={"MCC":                        {"CIQ_name":"MCC", "data":[]},
               "MNC":                        {"CIQ_name":"MNC", "data":[]}, 
-              "Cell-ID (ECGI)":             {"CIQ_name":"none","calculation":"E911 ECGI",},
+              "Cell-ID (ECGI)":             {"CIQ_name":"none","alteration":matching_E911["ECGI"]},
               "CellName":                   {"CIQ_name":"LNCEL Name","data":[]},
               "CellSite":                   {"CIQ_name":"Property Name","data":[]},
               "PhysicalCellID (ECGI)":      {"CIQ_name":"PCI","data":[]},
@@ -80,7 +87,7 @@ matching_VAS={"MCC":                        {"CIQ_name":"MCC", "data":[]},
               "Range":                      {"CIQ_name":"none","default":100},
               "ServingAltitudeUncertainty": {"CIQ_name":"none","default":12},
               "SupportedPDEs":              {"CIQ_name":"none","default":2},   
-              "NeighbourList":              {"CIQ_name":"none","calculation":"VAS NeighbourList"},
+              "NeighbourList":              {"CIQ_name":"none"},
               "SIPRoute":                   {"CIQ_name":"none"},
               "MiscFlags":                  {"CIQ_name":"none","default":1},
               "eNodeBToAntennaDelay":       {"CIQ_name":"none"},
@@ -91,24 +98,15 @@ matching_Core={"eNodeB Name":               {"CIQ_name":"none",
                                                 "concatenate":"Core eNodeB",
                                                  "data":[]},
                    "TAC":                       {"CIQ_name":"TAC", "data":[]},
-                   "E-UTRAN cell identity (ECI)":{"CIQ_name":"none","calculation":"E911 ECGI"},
+                   "E-UTRAN cell identity (ECI)":{"CIQ_name":"none","alteration":matching_E911["ECGI"]},
                    "Mapping cell name":         {"CIQ_name":"LNCEL Name", "data":[]},
                    "Mapping cell SAC":          {"CIQ_name":"LNCEL ID", "data":[]},
                    "Mapping cell LAC":          {"CIQ_name":"none","calculation":"Core Mapping cell LAC","data":[]}, 
                    "Address":                   {"CIQ_name":"Property Address","data":[]},
                    "City":                      {"CIQ_name":"none","address":"city"}
-                    }
-def __cell_style():
-    #adding style
-    highlight = NamedStyle(name="highlight")
-    highlight.font = Font(name='Ebrima',size=8,)
-    highlight.alignment=Alignment(horizontal='center')
-    bd = Side(style='thick', color="000000")
-    highlight.border = Border(left=bd, top=bd, right=bd, bottom=bd)
-    return highlight
+                    } 
 
 
-"""
 def __addressAnalyzer(address_str):
     try:
         with open('zip2prov.json', 'r') as f:
@@ -145,15 +143,24 @@ def __addressAnalyzer(address_str):
                         address["partialAddress"]=address_str[:address_str.find(city)]           
     return
 #    print(address)
-"""
-"""
+    
+def __cell_style():
+    #adding style
+    highlight = NamedStyle(name="highlight")
+    highlight.font = Font(name='Ebrima',size=8,)
+    highlight.alignment=Alignment(horizontal='center')
+    bd = Side(style='thick', color="000000")
+    highlight.border = Border(left=bd, top=bd, right=bd, bottom=bd)
+    return highlight
+
 def __loading_data(dataset, matching):
- 
+    """
+    """
     for key,value in matching.items():
         if value["CIQ_name"] in dataset:
             matching[key]["data"]=dataset.get(value["CIQ_name"]).copy()
     return matching
-    
+
 def __uploading_data(ws,minCol,maxCol,minRow,maxRow,matching,highlight):
 
     for col in ws.iter_cols(min_col=minCol,max_col=maxCol,min_row=minRow,max_row=maxRow):
@@ -216,164 +223,132 @@ def __uploading_data(ws,minCol,maxCol,minRow,maxRow,matching,highlight):
                     cell.value=tempValue
                     cell.style=highlight
                     i+=1
-"""
-def __processData(dataset, matching):
-    lengthMax = 0
-    tempValue=list()
-    for key,value in matching.items():
-        if value["CIQ_name"] in dataset:
-            matching[key]["data"]=dataset.get(value["CIQ_name"]).copy()
-            if lengthMax < len(matching[key]["data"]):
-                lengthMax=len(matching[key]["data"])
-        if matching[key]["CIQ_name"] == "none":
-            tempValue = list()
-            if "default" in matching[key]:
-                tempValue = [matching[key]["default"]] * lengthMax
-            elif "concatenate" in matching[key]:
-                if matching[key]["concatenate"] == "E911 Sector Name":
-                    tempValue = list(map(lambda x:str(x[0])+"-"+str(x[1])+ "_S1",zip(dataset["Property Name"],dataset["LNBTS ID"])))
-                if matching[key]["concatenate"] == "E911 Cell ID":
-                    tempValue = list(map(lambda x: str(x[1])+"_"+str(x[0]),zip(dataset["LNCEL ID"],dataset["LNBTS ID"])))
-                if matching[key]["concatenate"] == "Core eNodeB":
-                    tempValue = list(map(lambda x: str(x[0])+"-"+str(x[1]), zip(dataset["Property Name"],dataset["LNBTS ID"])))
-            elif "calculation" in matching[key]:
-                if matching[key]["calculation"] == "CM Latitude":
-                    tempValue = [round(math.pow(2, 23) / 90 * float(x), 0) for x in dataset["Latitude [Dec Deg]"]]
-                if matching[key]["calculation"] == "CM Longitude":
-                    tempValue = list(map(lambda x:round(math.pow(2, 24) / 360 * float(x), 0),dataset["Longitude [Dec Deg]"]))
-                if matching[key]["calculation"] == "E911 ECGI":
-                    tempValue = list(map(lambda x:int(x[1]) *256 + int(x[0]),zip(dataset["LNCEL ID"],dataset["LNBTS ID"])))
-                if matching[key]["calculation"] == "Core Mapping cell LAC":
-                    tempValue = list(map(lambda x: int("2" + str(x)[1:]) , dataset["TAC"]))
-                if matching[key]["calculation"] == "VAS NeighbourList":
-                    tempValue=list()
-                    for lncel, lnbts in zip(dataset['LNCEL ID'],dataset['LNBTS ID']):
-                        index=-1
-                        if lncel == 11 or lncel==19:
-                            for i,t in enumerate(zip(dataset['LNCEL ID'],dataset['LNBTS ID'])):
-                                if t[0]==14 and t[1]==lnbts:
-                                    index=i
-                        elif lncel == 12 or lncel == 14:
-                            # index = i if lncel_t == 11 and lncel_t == lnbts in enumerate(
-                            #     zip(dataset['LNCEL ID'], dataset['LNBTS ID'])) else -1
-                            for i,t in enumerate(zip(dataset['LNCEL ID'],dataset['LNBTS ID'])):
-                                if t[0]==11 and t[1]==lnbts:
-                                    index=i
-                        if index!=-1:
-                            tempValue.append(str(dataset["MCC"][index])+"-"+str(dataset["MNC"][index])+"-"+str(int(dataset["LNBTS ID"][index]) *256 + int(dataset["LNCEL ID"][index])))
-            elif "pairing" in matching[key]:
-                tempValue = [matching[key]["pairing"][x] for x in dataset["Band Indicator"]]
-            elif "address" in matching[key]:
-                tempValue = [address[matching[key]["address"]] for address in dataset['Analyzed Address']]
-            matching[key]["data"]=tempValue
-    # for key,value in matching.items():
-    #     if value["data"]:print(key,":",value["data"][0])
-    return lengthMax
-def __uploadData(ws,minCol,maxCol,minRow,maxRow,matching,highlight):
-    print("min row is {}, and max row is{}".format(minRow,maxRow))
-    for col in ws.iter_cols(min_col=minCol,max_col=maxCol,min_row=minRow,max_row=maxRow):
-        key=""
-        i=0
-        for cell in col:
-            if cell.row==minRow:
-                key = cell.value
-                i = 0
-            else:
-                try:
-                    if matching[key]["data"]:
-                        cell.value = matching[key]["data"][i]
-                except Exception as e:
-                    print("error occur~ {}".format(e))
-                    print("key: "+key + ", i: "+str(i))
 
-                cell.style = highlight
-                i+=1
-    return
-
-
-def __generateExcels( sitecode, filename ,lengthMax):
-
-    if filename == "CM":
-        fileNameTemp = "CM Name Upload.xlsx"
-    if filename == "SAS info":
-        fileNameTemp = "LTE E911 SAS Info.xlsx"
-    if filename == "unlock":
-        fileNameTemp = "Cells to Unlock Unreserve.xlsx"
-    try:
-        wb = load_workbook(fileNameTemp, data_only=True)
-    except:
-        print("file does not exist!")
-    highlight=__cell_style()
-    wb.add_named_style(highlight)
-    if filename == "CM":
-        ws = wb["CM Name"]
-        __uploadData(ws,2,len(matching_CM)+1,2,lengthMax+2,matching_CM,highlight)
-    if filename == "SAS info":
-        fileNameTemp = "LTE E911 SAS Info.xlsx"
-        ws = wb["E911-LTE"]
-        __uploadData(ws,1,len(matching_E911),1,lengthMax+1,matching_E911,highlight)
-        ws = wb["VAS-LTE"]
-        __uploadData(ws,2,len(matching_VAS)+1,1,lengthMax+1,matching_VAS,highlight)
-        ws = wb["Core-LTE"]
-        __uploadData(ws,1,len(matching_Core),1,lengthMax+1,matching_Core,highlight)
-    if filename == "unlock":
-        ws = wb["LNCEL"]
-        fileNameTemp = "Cells to Unlock Unreserve.xlsx"
-        __uploadData(ws,2,len(matching_UN)+1,2,lengthMax+2,matching_UN,highlight)
-    wb.save(sitecode+fileNameTemp)
-    print(fileNameTemp.split(".")[0] +" file is generated!")
-    return
-    pass
-def generate_datafill(dataset, sitecode, filename):
-
-    if filename == "CM":
-        lengthMax=__processData(dataset, matching_CM)
-        __generateExcels(sitecode, filename,lengthMax)
-    if filename == "SAS info":
-        lengthMax=__processData(dataset, matching_E911)
-        lengthMax=__processData(dataset, matching_VAS)
-        lengthMax = __processData(dataset, matching_Core)
-        __generateExcels(sitecode, filename,lengthMax)
-    if filename == "unlock":
-        lengthMax=__processData(dataset, matching_UN)
-        __generateExcels(sitecode, filename,lengthMax)
-    if filename == "SCF":
-        __generate_SCF(dataset,sitecode)
-    return
+        
 
 #change directory
 def __editingDate():
     return time.strftime("%d-%b-%Y", time.localtime())
 
+def generate_unlock(dataset,sitecode=""):
+    path=""
+    fileNameTemp="Cells to Unlock Unreserve.xlsx"
+    count=0
+    #sitecode="AEDa015 "
+    try:
+        wb = load_workbook(fileNameTemp, data_only=True)
+    except:
+        print("file does not exist!")
+    
+    highlight=__cell_style()
+    wb.add_named_style(highlight)     
+    __loading_data(dataset, matching_UN)
+    #print(matching)
+    ws=wb["LNCEL"]    
+    count=len(matching_UN["MRBTS"]["data"])
+    __uploading_data(ws,2,len(matching_UN)+1,2,count+2,matching_UN,highlight)
+    #final step-save file and return
+    #print(matching)
+    wb.save(sitecode+fileNameTemp)
+    print("Unlock & Unreserve file is generated!")
+    return
+        
+"""
+"""
+def generate_CM(dataset,sitecode=""):
+    
+    path=""
+    fileNameTemp="CM Name Upload.xlsx"
+    count=0
+    #sitecode="AEDa015 "
+    try:
+        wb = load_workbook(fileNameTemp,data_only=True)
+    except:
+        print("file does not exist!")
+    
+    highlight=__cell_style()
+    wb.add_named_style(highlight)     
+    __loading_data(dataset, matching_CM)
+    
+   #get index based on the field name
 
-def __generate_SCF(dataset,sitecode=""):
-    """
-    this is not necessary to change, for the format is different with other excels
-    :param dataset: data set of CIQ
-    :param sitecode: site code
-    :return: null, just generate the file
-    """
+    count = len(matching_CM["LNCEL Name"]["data"])
+    ws=wb["CM Name"]  
+    __uploading_data(ws,2,len(matching_CM)+1,2,count+2,matching_CM,highlight)
+    #final step-save file and return
+    wb.save(sitecode+fileNameTemp)
+    print("CM file is generated!")
+    return
+
+"""                                
+""" 
+def generate_SAS_info(dataset,sitecode=""):
+  
+    path=""
+    fileNameTemp="LTE E911 SAS Info.xlsx"
+    count=0
+    #sitecode="AEDa015 "
+    try:
+        wb = load_workbook(fileNameTemp,data_only=True)
+    except:
+        print("file does not exist!")
+        
+    #adding style
+    highlight=__cell_style()
+    wb.add_named_style(highlight)     
+    
+    #get address details
+    # address_str=dataset["Property Address"][0]
+    # __addressAnalyzer(address_str)
+    #print(address)
+    __addresslist = dataset['Analyzed Address']
+    #load data from CIQ to local storage
+    __loading_data(dataset, matching_E911)
+    __loading_data(dataset, matching_VAS)
+    __loading_data(dataset, matching_Core)
+    
+    #working on the first worksheet                               
+    ws=wb["E911-LTE"]   
+    count = len(matching_E911["Name"]["data"])
+    __uploading_data(ws,1,len(matching_E911),1,count+1,matching_E911,highlight)
+                                  
+    #working on the second worksheet 
+    ws=wb["VAS-LTE"]
+    __uploading_data(ws,2,len(matching_VAS)+1,1,count+1,matching_VAS,highlight)
+ 
+    #working on the third worksheet 
+    ws=wb["Core-LTE"]      
+    __uploading_data(ws,1,len(matching_Core),1,count+1,matching_Core,highlight)
+
+    #final step-save file and return
+    wb.save(sitecode+fileNameTemp)
+    print("SAS file is generated!")
+    return
+
+
+def generate_SCF(dataset,sitecode=""):
     matching_SCF={
         "Site ID":{"CIQ_name":"MRBTS ID", "data":[]},
         "WBTS ID":{"CIQ_name":"LNBTS ID", "data":[]},
         "WBTS name":{"CIQ_name":"Property Name", "data":[]},
     }
-
+    path=""
     fileNameTemp="Small Cell SCF Flex.xlsx"
     count=0
+    #sitecode="AEDa015 "
     try:
         wb = load_workbook(fileNameTemp,data_only=True)
     except:
         print("file does not exist!")
-
+    i=0
     count=0
-    for x in zip(dataset[matching_SCF["Site ID"]["CIQ_name"]],dataset[matching_SCF["WBTS ID"]["CIQ_name"]],dataset[matching_SCF["WBTS name"]["CIQ_name"]]):
-        if x[0] not in matching_SCF["Site ID"]["data"]:
-            matching_SCF["Site ID"]["data"].append(x[0])
-            matching_SCF["WBTS ID"]["data"].append(x[1])
-            matching_SCF["WBTS name"]["data"].append(x[2])
+    for x in dataset[matching_SCF["Site ID"]["CIQ_name"]]:
+        if x not in matching_SCF["Site ID"]["data"]:
+            matching_SCF["Site ID"]["data"].append(x)
+            matching_SCF["WBTS ID"]["data"].append(dataset[matching_SCF["WBTS ID"]["CIQ_name"]][i])
+            matching_SCF["WBTS name"]["data"].append(dataset[matching_SCF["WBTS name"]["CIQ_name"]][i])
             count+=1
-
+        i+=1
     
     print(count)
     print(matching_SCF)
